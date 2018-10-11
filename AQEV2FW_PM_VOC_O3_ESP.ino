@@ -31,7 +31,7 @@
 // semantic versioning - see http://semver.org/
 #define AQEV2FW_MAJOR_VERSION 2
 #define AQEV2FW_MINOR_VERSION 3
-#define AQEV2FW_PATCH_VERSION 2
+#define AQEV2FW_PATCH_VERSION 3
 
 #define WLAN_SEC_AUTO (10) // made up to support auto-config of security
 
@@ -333,7 +333,7 @@ uint8_t mode = MODE_OPERATIONAL;
 #define EEPROM_O3_CAL_OFFSET     (EEPROM_O3_CAL_SLOPE - 4)       // float value, 4-btyes, the offset applied to the sensor
 #define EEPROM_O3_ZERO_NEGATIVE_RESULTS (EEPROM_O3_CAL_OFFSET - 1)
 #define EEPROM_O3_BASELINE_VOLTAGE_TABLE (EEPROM_O3_ZERO_NEGATIVE_RESULTS - (5*sizeof(baseline_voltage_t))) // array of (up to) five structures for baseline offset characterization over temperature
-#define EEPROM_TEMPERATURE_OFFLINE_OFFSET (EEPROM_PM10P0_CAL_OFFSET - 4)
+#define EEPROM_TEMPERATURE_OFFLINE_OFFSET (EEPROM_O3_BASELINE_VOLTAGE_TABLE - 4)
 #define EEPROM_HUMIDITY_OFFLINE_OFFSET (EEPROM_TEMPERATURE_OFFLINE_OFFSET - 4)
 #define EEPROM_MQTT_STAY_CONNECTED (EEPROM_HUMIDITY_OFFLINE_OFFSET - 1)
 //  /\
@@ -719,7 +719,7 @@ const uint8_t heartbeat_waveform[NUM_HEARTBEAT_WAVEFORM_SAMPLES] PROGMEM = {
 };
 uint8_t heartbeat_waveform_index = 0;
 
-#define SCRATCH_BUFFER_SIZE (512)
+#define SCRATCH_BUFFER_SIZE (1024)
 char scratch[SCRATCH_BUFFER_SIZE] = { 0 };  // scratch buffer, for general use
 uint16_t scratch_idx = 0;
 #define ESP8266_INPUT_BUFFER_SIZE (1000)
@@ -909,7 +909,7 @@ void setup() {
             if((mode != MODE_CONFIG) && mode_requires_wifi(target_mode) && !valid_ssid_passed) {
 
                 Serial.println(F("Info: No valid SSID configured, automatically falling back to CONFIG mode."));
-                configInject("aqe\r");
+                configInject(F("aqe\r"));
                 Serial.println();
 
                 if(true) {
@@ -922,7 +922,7 @@ void setup() {
                                   "NETWORK SETTINGS"));
                     delay(LCD_ERROR_MESSAGE_DELAY);
 
-                    configInject("aqe\r");
+                    configInject(F("aqe\r"));
                     Serial.println();
                     mode = MODE_CONFIG;
                 }
@@ -930,7 +930,7 @@ void setup() {
             else if(!integrity_check_passed) {
                 // we have no choice but to offer config mode to the user
                 Serial.println(F("Info: Config memory integrity check failed, automatically falling back to CONFIG mode."));
-                configInject("aqe\r");
+                configInject(F("aqe\r"));
                 Serial.println();
                 setLCD_P(PSTR("CONFIG INTEGRITY"
                               "  CHECK FAILED  "));
@@ -968,7 +968,7 @@ void setup() {
             Serial.println(F(" mins without input."));
             Serial.println(F("Enter 'help' for a list of available commands, "));
 
-            configInject("get settings\r");
+            configInject(F("get settings\r"));
             Serial.println();
             Serial.println(F(" @=============================================================@"));
             Serial.println(F(" # GETTING STARTED                                             #"));
@@ -1710,7 +1710,7 @@ void initializeNewConfigSettings(void) {
     uint8_t val = eeprom_read_byte((const uint8_t *) EEPROM_MQTT_TOPIC_PREFIX);
     if(val == 0xFF) {
         if(!in_config_mode) {
-            configInject("aqe\r");
+            configInject(F("aqe\r"));
             in_config_mode = true;
         }
         memset(command_buf, 0, 128);
@@ -1725,17 +1725,17 @@ void initializeNewConfigSettings(void) {
     eeprom_read_block(command_buf, (const void *) EEPROM_MQTT_SERVER_NAME, 31);
     if(strcmp_P(command_buf, PSTR("opensensors.io")) == 0) {
         if(!in_config_mode) {
-            configInject("aqe\r");
+            configInject(F("aqe\r"));
             in_config_mode = true;
         }
-        configInject("mqttsrv mqtt.opensensors.io\r");
+        configInject(F("mqttsrv mqtt.opensensors.io\r"));
     }
 
     // if the mqtt suffix enable is neither zero nor one, set it to one (enabled)
     val = eeprom_read_byte((const uint8_t *) EEPROM_MQTT_TOPIC_SUFFIX_ENABLED);
     if(val == 0xFF) {
         if(!in_config_mode) {
-            configInject("aqe\r");
+            configInject(F("aqe\r"));
             in_config_mode = true;
         }
         memset(command_buf, 0, 128);
@@ -1746,7 +1746,7 @@ void initializeNewConfigSettings(void) {
     val = eeprom_read_byte((const uint8_t *) EEPROM_2_2_0_SAMPLING_UPD);
     if(val != 1) {
         if(!in_config_mode) {
-            configInject("aqe\r");
+            configInject(F("aqe\r"));
             in_config_mode = true;
         }
 
@@ -1758,7 +1758,7 @@ void initializeNewConfigSettings(void) {
         memset(command_buf, 0, 128);
         eeprom_write_block(command_buf, (void *) EEPROM_NTP_SERVER_NAME, 32);
         if(strcmp(command_buf, "pool.ntp.org") == 0) {
-            configInject("ntpsrv 0.airqualityegg.pool.ntp.org\r");
+            configInject(F("ntpsrv 0.airqualityegg.pool.ntp.org\r"));
         }
 
         recomputeAndStoreConfigChecksum();
@@ -1775,16 +1775,16 @@ void initializeNewConfigSettings(void) {
             if(strncmp_P(converted_value_string, PSTR("egg"), 3) == 0) {
 
                 if(!in_config_mode) {
-                    configInject("aqe\r");
+                    configInject(F("aqe\r"));
                     in_config_mode = true;
                 }
 
                 // change the mqtt server to mqtt.wickeddevice.com
                 // and change the mqtt username to the egg serial number
                 // effectively:
-                //   configInject("mqttsrv mqtt.wickeddevice.com\r");
-                //   configInject("mqttuser egg-serial-number \r");
-                configInject("mqttsrv mqtt.wickeddevice.com\r");
+                //   configInject(F("mqttsrv mqtt.wickeddevice.com\r"));
+                //   configInject(F("mqttuser egg-serial-number \r"));
+                configInject(F("mqttsrv mqtt.wickeddevice.com\r"));
                 strcpy_P(raw_instant_value_string, PSTR("mqttuser "));
                 strcat(raw_instant_value_string, converted_value_string);
                 strcat_P(raw_instant_value_string, PSTR("\r"));
@@ -1797,9 +1797,9 @@ void initializeNewConfigSettings(void) {
     uint8_t backlight_startup = eeprom_read_byte((uint8_t *) EEPROM_BACKLIGHT_STARTUP);
     uint16_t backlight_duration = eeprom_read_word((uint16_t *) EEPROM_BACKLIGHT_DURATION);
     if((backlight_startup == 0xFF) || (backlight_duration == 0xFFFF)) {
-        configInject("aqe\r");
-        configInject("backlight initon\r");
-        configInject("backlight 60\r");
+        configInject(F("aqe\r"));
+        configInject(F("backlight initon\r"));
+        configInject(F("backlight 60\r"));
         in_config_mode = true;
     }
 
@@ -1809,14 +1809,14 @@ void initializeNewConfigSettings(void) {
     uint16_t l_averaging_interval = eeprom_read_word((uint16_t * ) EEPROM_AVERAGING_INTERVAL);
     if((l_sampling_interval == 0xFFFF) || (l_reporting_interval == 0xFFFF) || (l_averaging_interval == 0xFFFF)) {
         if(!in_config_mode) {
-            configInject("aqe\r");
+            configInject(F("aqe\r"));
             in_config_mode = true;
         }
-        configInject("sampling 5, 300, 60\r");
+        configInject(F("sampling 5, 300, 60\r"));
     }
 
     if(in_config_mode) {
-        configInject("exit\r");
+        configInject(F("exit\r"));
     }
 
     allowed_to_write_config_eeprom = false;
@@ -2018,6 +2018,13 @@ void configInject(char * str) {
             reset_buffers = false;
         }
     }
+}
+
+void configInject(const __FlashStringHelper *ifsh) {
+    memset(converted_value_string, 0, 64);
+    PGM_P p = reinterpret_cast<PGM_P>(ifsh);
+    strcpy_P(converted_value_string, p);
+    configInject((char *) converted_value_string);
 }
 
 void lowercase(char * str) {
@@ -2773,40 +2780,40 @@ void restore(char * arg) {
         prompt();
 
 
-        configInject("method direct\r");
-        configInject("security auto\r");
-        configInject("use dhcp\r");
-        configInject("opmode normal\r");
-        configInject("tempunit C\r");
-        configInject("altitude -1\r");
-        configInject("backlight 60\r");
-        configInject("backlight initon\r");
-        configInject("mqttsrv mqtt.wickeddevice.com\r");
-        configInject("mqttport 1883\r");
-        configInject("mqttauth enable\r");
-        // configInject("mqttuser wickeddevice\r");
-        configInject("mqttprefix /orgs/wd/aqe/\r");
-        configInject("mqttsuffix enable\r");
+        configInject(F("method direct\r"));
+        configInject(F("security auto\r"));
+        configInject(F("use dhcp\r"));
+        configInject(F("opmode normal\r"));
+        configInject(F("tempunit C\r"));
+        configInject(F("altitude -1\r"));
+        configInject(F("backlight 60\r"));
+        configInject(F("backlight initon\r"));
+        configInject(F("mqttsrv mqtt.wickeddevice.com\r"));
+        configInject(F("mqttport 1883\r"));
+        configInject(F("mqttauth enable\r"));
+        // configInject(F("mqttuser wickeddevice\r"));
+        configInject(F("mqttprefix /orgs/wd/aqe/\r"));
+        configInject(F("mqttsuffix enable\r"));
 
-        configInject("sampling 5, 300, 60\r"); // sample every 5 seconds, average over 1 minutes, report every minute
-        configInject("restore particulate\r");
-        configInject("restore eco2\r");
-        configInject("restore tvoc\r");
-        configInject("restore res\r");
-        configInject("restore o3\r");
-        configInject("o3_negz 1\r");
+        configInject(F("sampling 5, 300, 60\r")); // sample every 5 seconds, average over 1 minutes, report every minute
+        configInject(F("restore particulate\r"));
+        configInject(F("restore eco2\r"));
+        configInject(F("restore tvoc\r"));
+        configInject(F("restore res\r"));
+        configInject(F("restore o3\r"));
+        configInject(F("o3_negz 1\r"));
 
-        configInject("ntpsrv disable\r");
-        configInject("ntpsrv 0.airqualityegg.pool.ntp.org\r");
-        configInject("restore tz_off\r");
-        configInject("restore temp_off\r");
-        configInject("restore hum_off\r");
-        configInject("restore mqttpwd\r");
-        configInject("restore mqttid\r");
-        configInject("restore updatesrv\r");
-        configInject("restore updatefile\r");
-        configInject("restore key\r");
-        configInject("restore mac\r");
+        configInject(F("ntpsrv disable\r"));
+        configInject(F("ntpsrv 0.airqualityegg.pool.ntp.org\r"));
+        configInject(F("restore tz_off\r"));
+        configInject(F("restore temp_off\r"));
+        configInject(F("restore hum_off\r"));
+        configInject(F("restore mqttpwd\r"));
+        configInject(F("restore mqttid\r"));
+        configInject(F("restore updatesrv\r"));
+        configInject(F("restore updatefile\r"));
+        configInject(F("restore key\r"));
+        configInject(F("restore mac\r"));
 
         // copy the MQTT ID to the MQTT Username
         eeprom_read_block((void *) tmp, (const void *) EEPROM_MQTT_CLIENT_ID, 32);
@@ -3505,7 +3512,7 @@ void set_static_ip_address(char * arg) {
             Serial.println(F("Error: Too many parameters passed to staticip"));
             Serial.print(F("       "));
             Serial.println(arg);
-            configInject("help staticip\r");
+            configInject(F("help staticip\r"));
             Serial.println();
             return;
         }
@@ -3517,7 +3524,7 @@ void set_static_ip_address(char * arg) {
         Serial.println(F("Error: Too few parameters passed to staticip"));
         Serial.print(F("       "));
         Serial.println(arg);
-        configInject("help staticip\r");
+        configInject(F("help staticip\r"));
         Serial.println();
         return;
     }
@@ -3627,9 +3634,9 @@ void force_command(char * arg) {
         Serial.println(F("Info: Erasing last flash page"));
         SUCCESS_MESSAGE_DELAY();
         invalidateSignature();
-        configInject("opmode normal\r");
+        configInject(F("opmode normal\r"));
         mode = SUBMODE_NORMAL;
-        configInject("exit\r");
+        configInject(F("exit\r"));
     }
     else {
         Serial.print(F("Error: Invalid parameter provided to 'force' command - \""));
@@ -4136,7 +4143,7 @@ void backup(char * arg) {
     uint16_t backup_check = eeprom_read_word((const uint16_t *) EEPROM_BACKUP_CHECK);
 
     if (strncmp("mac", arg, 3) == 0) {
-        configInject("init mac\r"); // make sure the ESP8266 mac address is in EEPROM
+        configInject(F("init mac\r")); // make sure the ESP8266 mac address is in EEPROM
         Serial.println();
         eeprom_read_block(tmp, (const void *) EEPROM_MAC_ADDRESS, 6);
         eeprom_write_block(tmp, (void *) EEPROM_BACKUP_MAC_ADDRESS, 6);
@@ -4281,17 +4288,17 @@ void backup(char * arg) {
     }
     else if (strncmp("all", arg, 3) == 0) {
         valid = false;
-        configInject("backup mqttpwd\r");
-        configInject("backup key\r");
+        configInject(F("backup mqttpwd\r"));
+        configInject(F("backup key\r"));
 
-        configInject("backup particulate\r");
-        configInject("backup tvoc\r");
-        configInject("backup o3\r");
+        configInject(F("backup particulate\r"));
+        configInject(F("backup tvoc\r"));
+        configInject(F("backup o3\r"));
 
-        configInject("backup temp\r");
-        configInject("backup hum\r");
-        configInject("backup mac\r");
-        configInject("backup tz\r");
+        configInject(F("backup temp\r"));
+        configInject(F("backup hum\r"));
+        configInject(F("backup mac\r"));
+        configInject(F("backup tz\r"));
         Serial.println();
     }
     else {
@@ -7221,7 +7228,7 @@ void printCsvDataLine() {
         appendToString(pm1p0_ugpm3, 1, dataString, &dataStringRemaining);
 
         Serial.print(F(","));
-        appendToString(",", dataString, &dataStringRemaining);
+        appendToString("," , dataString, &dataStringRemaining);
 
         pm2p5_moving_average = calculateAverage(&(sample_buffer[A_PM2P5_SAMPLE_BUFFER][0]), num_samples);
         pm2p5_convert_to_ugpm3(pm2p5_moving_average, &compensated_value);
@@ -7234,7 +7241,7 @@ void printCsvDataLine() {
         appendToString(pm2p5_ugpm3, 1, dataString, &dataStringRemaining);
 
         Serial.print(F(","));
-        appendToString(",", dataString, &dataStringRemaining);
+        appendToString("," , dataString, &dataStringRemaining);
 
         pm10p0_moving_average = calculateAverage(&(sample_buffer[A_PM10P0_SAMPLE_BUFFER][0]), num_samples);
         pm10p0_convert_to_ugpm3(pm10p0_moving_average, &compensated_value);
@@ -7252,7 +7259,7 @@ void printCsvDataLine() {
     }
 
     Serial.print(F(","));
-    appendToString(",", dataString, &dataStringRemaining);
+    appendToString("," , dataString, &dataStringRemaining);
 
     float eco2_moving_average = 0.0f;
     float tvoc_moving_average = 0.0f;
@@ -7276,13 +7283,13 @@ void printCsvDataLine() {
         appendToString(eco2_moving_average, 0, dataString, &dataStringRemaining);
 
         Serial.print(F(","));
-        appendToString(",", dataString, &dataStringRemaining);
+        appendToString("," , dataString, &dataStringRemaining);
 
         Serial.print(tvoc_moving_average, 0);
         appendToString(tvoc_moving_average, 0, dataString, &dataStringRemaining);
 
         Serial.print(F(","));
-        appendToString(",", dataString, &dataStringRemaining);
+        appendToString("," , dataString, &dataStringRemaining);
 
         Serial.print(resistance_moving_average, 0);
         appendToString(resistance_moving_average, 0, dataString, &dataStringRemaining);
@@ -7292,20 +7299,20 @@ void printCsvDataLine() {
         appendToString("---", dataString, &dataStringRemaining);
 
         Serial.print(F(","));
-        appendToString(",", dataString, &dataStringRemaining);
+        appendToString("," , dataString, &dataStringRemaining);
 
         Serial.print(F("---"));
         appendToString("---", dataString, &dataStringRemaining);
 
         Serial.print(F(","));
-        appendToString(",", dataString, &dataStringRemaining);
+        appendToString("," , dataString, &dataStringRemaining);
 
         Serial.print(F("---"));
         appendToString("---", dataString, &dataStringRemaining);
     }
 
     Serial.print(F(","));
-    appendToString(",", dataString, &dataStringRemaining);
+    appendToString("," , dataString, &dataStringRemaining);
 
     float o3_moving_average = 0.0f;
     num_samples = o3_ready ? sample_buffer_depth : sample_buffer_idx;
@@ -7323,13 +7330,13 @@ void printCsvDataLine() {
     }
 
     Serial.print(F(","));
-    appendToString(",", dataString, &dataStringRemaining);
+    appendToString("," , dataString, &dataStringRemaining);
 
     Serial.print(o3_moving_average, 6);
     appendToString(o3_moving_average, 6, dataString, &dataStringRemaining);
 
     Serial.print(F(","));
-    appendToString(",", dataString, &dataStringRemaining);
+    appendToString("," , dataString, &dataStringRemaining);
 
 
 
